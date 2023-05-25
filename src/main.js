@@ -1,6 +1,6 @@
 let config = {
     type: Phaser.AUTO,
-    width: 320,
+    width: 640,
     height: 320,
     pixelArt: true,
     physics:{

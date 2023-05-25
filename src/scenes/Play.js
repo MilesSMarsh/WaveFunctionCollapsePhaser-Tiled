@@ -10,11 +10,20 @@ class Play extends Phaser.Scene{
 
     create(){
         const map = this.add.tilemap('tilemapJSON');
+        const map2 = this.add.tilemap('tilemapJSON');
 
+        const tileset2 = map2.addTilesetImage('RearWindowTileSheet(32x32)', 'tilesetImage');
         const tileset = map.addTilesetImage('RearWindowTileSheet(32x32)', 'tilesetImage');
       
-
         const firstLayer = map.createLayer('firstLayer', tileset, 0, 0);
+        const firstLayer2 = map2.createLayer('firstLayer', tileset2, 320, 0);
+
+        this.weightArr = new Array();
+
+        this.lowestEntropy = null;
+
+
+
 
         // const secondLayer = map.createLayer('testLayer', tileset, 0, 0);
 
@@ -48,9 +57,7 @@ class Play extends Phaser.Scene{
         // destroyLayer( [layer])
         // map.destroyLayer(firstLayer);
 
-
-
-
+        
 
 
 
@@ -68,7 +75,7 @@ class Play extends Phaser.Scene{
         //step 3: Initialize the wave in the completely unobserved state, i.e. with all the boolean coefficients being true.
 
         //step 4: Repeat the following steps:
-        //  i. Observation:
+        //  i.  Observation:
         //      A: Find a wave element with the minimal nonzero entropy. 
         //      If there is no such elements (if all elements have zero or undefined entropy) 
         //      then break the cycle (4) and go to step (5).
@@ -91,8 +98,7 @@ class Play extends Phaser.Scene{
 
         // step 1: Read the input bitmap and count NxN patterns.
 
-        let rules = this.getRules(map, firstLayer);
-        console.log(rules);
+        let rules = this.iterateOverMap(map, firstLayer);
 
 
         // step 2: Create an array with the dimensions of the output.
@@ -103,21 +109,21 @@ class Play extends Phaser.Scene{
         //      true coefficient means that the corresponding pattern is not yet forbidden.
 
         
+        this.newMap = new Array(map.height);
+        for (var i = 0; i < map.height; i++) {
+            this.newMap[i] = new Array(map.width); 
+            for(var j = 0; j < map.width; j++){
 
+                //step 3: Initialize the wave in the completely unobserved state, i.e. with all the boolean coefficients being true.
 
+                this.newMap[i][j] = {weights: new Array(...this.weightArr), collapsed: false, index:[i, j], tileIndex: null};
+            }
+        }
 
-
-
-
-
-
-
-
-
-        //step 3: Initialize the wave in the completely unobserved state, i.e. with all the boolean coefficients being true.
-
-        //step 4: Repeat the following steps:
-        //  i. Observation:
+        console.log(this.newMap);
+        
+        //step 4: Repeat the following steps:New
+        //  i.  Observation:
         //      A: Find a wave element with the minimal nonzero entropy. 
         //      If there is no such elements (if all elements have zero or undefined entropy) 
         //      then break the cycle (4) and go to step (5).
@@ -127,6 +133,18 @@ class Play extends Phaser.Scene{
         //
         //  ii. Propogation:
         //      A: Propagation: propagate information gained on the previous observation step.
+
+
+        for(let x = 0; x < 100; x++){
+            var lowEntrop = this.findLowestEntropy();
+            this.collapse(this.lowestEntropy, map2);
+            map2.putTileAt(lowEntrop.tileIndex, lowEntrop.index[0], lowEntrop.index[1], true, firstLayer2);
+        }
+
+
+
+
+
         
         //step 5: By now all the wave elements are either in a completely observed state 
         //      (all the coefficients except one being zero) or in the contradictory state 
@@ -137,24 +155,45 @@ class Play extends Phaser.Scene{
 
     }
 
+
+
+
     update(){
 
     }
 
-    getRules(tileMap, layer){
-        let adjacencyRulesArray = [];
-        let currTile;
-        let results;
+
+    iterateOverMap(tileMap, layer){
+        var adjacencyRulesArray = [];
+        var currTile;
+        var results;
+        var isIn = false;
 
         for(let y = 0; y < tileMap.height; y++){
             for(let x = 0; x < tileMap.width; x++){
 
-                currTile = tileMap.getTileAt(x, y, true, layer)
+                currTile = tileMap.getTileAt(x, y, true, layer);
 
-                let upTile = null;
-                let downTile = null;
-                let leftTile = null;
-                let rightTile = null;
+                if(this.weightArr.length == 0){
+                    this.weightArr.push({index: currTile.index, frequency: 0});
+                } 
+
+                isIn = false;
+                for(let elem of this.weightArr){
+                    if(elem.index == currTile.index){
+                        elem.frequency += 1;
+                        isIn = true;
+                        break;
+                    }
+                }
+                if(!isIn){
+                    this.weightArr.push({index: currTile.index, frequency: 1});
+                }
+
+                var upTile = null;
+                var downTile = null;
+                var leftTile = null;
+                var rightTile = null;
 
                 if(currTile.y > 0){
 
@@ -175,7 +214,7 @@ class Play extends Phaser.Scene{
                 }
 
                 if(currTile.x < tileMap.width - 1){
-
+                    
                     rightTile = tileMap.getTileAt(x + 1, y, true, layer);
                     adjacencyRulesArray.push({index: currTile.index, adjacentTileIndex: rightTile.index, direction: 'right'});
                 }
@@ -184,11 +223,75 @@ class Play extends Phaser.Scene{
         }
 
 
+
+
         //get rid of duplicate rules
         results = adjacencyRulesArray.filter(
-            (thing, index, self) =>
-            index === self.findIndex((t) => t.index === thing.index && t.adjacentTileIndex === thing.adjacentTileIndex && t.direction === thing.direction)
-            );
+            (thing, index, self) => index === self.findIndex((t) => t.index === thing.index && t.adjacentTileIndex === thing.adjacentTileIndex && t.direction === thing.direction));
+        
+
         return(results);
     }
+
+
+
+    findLowestEntropy(){
+
+        for(let row = 0; row < this.newMap.length; row++){
+            for(let col = 0; col < this.newMap[row].length; col++){
+                if(this.lowestEntropy == null){
+                    this.lowestEntropy = this.newMap[row][col];
+                }
+                else if(!this.newMap[row][col].collapsed && this.newMap[row][col].weights.length <= this.lowestEntropy.weights.length){
+                    this.lowestEntropy = this.newMap[row][col];
+                }
+            }
+        }
+
+        return this.lowestEntropy;
+
+    }
+
+    
+    collapse(tile){
+        var selectedIndex = this.getRandomIndex(tile.weights);
+        tile.collapsed = true;
+        tile.tileIndex = selectedIndex;
+    }
+
+    getRandomIndex(arrOfWeight){
+        //gets an index from an array of objects that have properties index and weight
+        //the chance the object is returned is based on the weight given
+        var rand = (Math.floor(Math.random()*99))/100;
+        var counter = 0;
+        var totalFreq = 0;
+        var foundIndex;
+
+        for(let x of arrOfWeight){
+            if(x.frequency){
+                totalFreq += x.frequency;
+            }
+        }
+
+        for(let y of arrOfWeight){
+            if(y.frequency){
+                counter += y.frequency/totalFreq
+                if(rand <= counter){
+                    foundIndex = y.index;
+                    break;
+                }
+            }
+        }
+
+        return foundIndex;
+    }
+
+    
+
+    propagate(){
+        
+    }
+    
+
+
 }
