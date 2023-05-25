@@ -44,7 +44,11 @@ class Play extends Phaser.Scene{
 
         // removeLayer( [layer])
         // map.removeLayer(secondLayer);
-        // secondLayer.destroy();
+
+        // destroyLayer( [layer])
+        // map.destroyLayer(firstLayer);
+
+
 
 
 
@@ -87,28 +91,17 @@ class Play extends Phaser.Scene{
 
         // step 1: Read the input bitmap and count NxN patterns.
 
-
-        let tileArray = [];
-        let adjacencyRulesArray = [];
-        let currTile;
+        let rules = this.getRules(map, firstLayer);
+        console.log(rules);
 
 
-        for(let y = 0; y < map.height; y++){
-            tileArray.push([]);
-            for(let x = 0; x < map.width; x++){
-                currTile = map.getTileAt(x, y, true, firstLayer)
-                tileArray[y].push(currTile);
-                map.getTileAt(x, y, true, firstLayer).rules = [{index: currTile.index, adjacentTileIndex: '#', direction: 'left'}, {index: currTile.index, adjacentTileIndex: '#2', direction: 'right'}];
-                map.getTileAt(x, y, true, firstLayer).rules.push({index: currTile.index, adjacentTileIndex: '#3', direction: 'up'}, {index: currTile.index, adjacentTileIndex: '#4', direction: 'down'})
-            }
-        }
+        // step 2: Create an array with the dimensions of the output.
+        //      Each element of this array represents a state of an NxN region in the output. 
+        //      A state of an NxN region is a superposition of NxN patterns of the input with boolean coefficients 
+        //      (so a state of a pixel in the output is a superposition of input colors with real coefficients).
+        //      False coefficient means that the corresponding pattern is forbidden,
+        //      true coefficient means that the corresponding pattern is not yet forbidden.
 
-        for(let r of tileArray){
-            for(let c of r){
-                console.log(c);
-
-            }
-        }
         
 
 
@@ -117,9 +110,28 @@ class Play extends Phaser.Scene{
 
 
 
-        // console.log(map.getTilesWithin(0, 0, map.width, map.height, firstLayer));
-        
 
+
+
+
+        //step 3: Initialize the wave in the completely unobserved state, i.e. with all the boolean coefficients being true.
+
+        //step 4: Repeat the following steps:
+        //  i. Observation:
+        //      A: Find a wave element with the minimal nonzero entropy. 
+        //      If there is no such elements (if all elements have zero or undefined entropy) 
+        //      then break the cycle (4) and go to step (5).
+        //
+        //      B: Collapse this element into a definite state according to its coefficients 
+        //      and the distribution of NxN patterns in the input.
+        //
+        //  ii. Propogation:
+        //      A: Propagation: propagate information gained on the previous observation step.
+        
+        //step 5: By now all the wave elements are either in a completely observed state 
+        //      (all the coefficients except one being zero) or in the contradictory state 
+        //      (all the coefficients being zero). In the first case return the output. 
+        //      In the second case finish the work without returning anything.
 
 
 
@@ -127,5 +139,56 @@ class Play extends Phaser.Scene{
 
     update(){
 
+    }
+
+    getRules(tileMap, layer){
+        let adjacencyRulesArray = [];
+        let currTile;
+        let results;
+
+        for(let y = 0; y < tileMap.height; y++){
+            for(let x = 0; x < tileMap.width; x++){
+
+                currTile = tileMap.getTileAt(x, y, true, layer)
+
+                let upTile = null;
+                let downTile = null;
+                let leftTile = null;
+                let rightTile = null;
+
+                if(currTile.y > 0){
+
+                    upTile = tileMap.getTileAt(x, y - 1, true, layer);
+                    adjacencyRulesArray.push({index: currTile.index, adjacentTileIndex: upTile.index, direction: 'up'});
+                }
+
+                if(currTile.y < tileMap.height - 1){
+
+                    downTile = tileMap.getTileAt(x, y + 1, true, layer);
+                    adjacencyRulesArray.push({index: currTile.index, adjacentTileIndex: downTile.index, direction: 'down'});
+                }
+
+                if(currTile.x > 0){
+
+                    leftTile = tileMap.getTileAt(x - 1, y, true, layer);
+                    adjacencyRulesArray.push({index: currTile.index, adjacentTileIndex: leftTile.index, direction: 'left'});
+                }
+
+                if(currTile.x < tileMap.width - 1){
+
+                    rightTile = tileMap.getTileAt(x + 1, y, true, layer);
+                    adjacencyRulesArray.push({index: currTile.index, adjacentTileIndex: rightTile.index, direction: 'right'});
+                }
+
+            }
+        }
+
+
+        //get rid of duplicate rules
+        results = adjacencyRulesArray.filter(
+            (thing, index, self) =>
+            index === self.findIndex((t) => t.index === thing.index && t.adjacentTileIndex === thing.adjacentTileIndex && t.direction === thing.direction)
+            );
+        return(results);
     }
 }
