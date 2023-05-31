@@ -19,10 +19,12 @@ class Play extends Phaser.Scene{
         const firstLayer2 = map2.createLayer('firstLayer', tileset2, 320, 0);
 
         this.weightArr = new Array();
+        this.complete = false;
 
-        this.lowestEntropy = null;
 
+        map2.fill(-1, 0 , 0 , 10 , 10, true, firstLayer2);
 
+        this.counter = 0;
 
 
         // const secondLayer = map.createLayer('testLayer', tileset, 0, 0);
@@ -98,7 +100,8 @@ class Play extends Phaser.Scene{
 
         // step 1: Read the input bitmap and count NxN patterns.
 
-        let rules = this.iterateOverMap(map, firstLayer);
+        this.rules = this.iterateOverMap(map, firstLayer);
+        console.log(this.rules)
 
 
         // step 2: Create an array with the dimensions of the output.
@@ -109,42 +112,56 @@ class Play extends Phaser.Scene{
         //      true coefficient means that the corresponding pattern is not yet forbidden.
 
         
-        this.newMap = new Array(map.height);
-        for (var i = 0; i < map.height; i++) {
-            this.newMap[i] = new Array(map.width); 
-            for(var j = 0; j < map.width; j++){
+        // while(!this.complete){
+            var tileCounter = 0;
 
-                //step 3: Initialize the wave in the completely unobserved state, i.e. with all the boolean coefficients being true.
+            this.weightMap = new Array(map.height);
+            for (var i = 0; i < map.height; i++) {
+                this.weightMap[i] = new Array(map.width); 
+                for(var j = 0; j < map.width; j++){
 
-                this.newMap[i][j] = {weights: new Array(...this.weightArr), collapsed: false, index:[i, j], tileIndex: null};
+                    //step 3: Initialize the wave in the completely unobserved state, i.e. with all the boolean coefficients being true.
+
+                    this.weightMap[i][j] = {weights: new Array(...this.weightArr), collapsed: false, x: j, y: i, tileIndex: null};
+                }
+            }
+
+            console.log(this.weightMap);
+        
+            //step 4: Repeat the following steps:New
+            //  i.  Observation:
+            //      A: Find a wave element with the minimal nonzero entropy. 
+            //      If there is no such elements (if all elements have zero or undefined entropy) 
+            //      then break the cycle (4) and go to step (5).
+            //
+            //      B: Collapse this element into a definite state according to its coefficients 
+            //      and the distribution of NxN patterns in the input.
+            //
+            //  ii. Propogation:
+            //      A: Propagation: propagate information gained on the previous observation step.
+
+            for(let x = 0; x < 100; x++){
+                var lowEntrop = this.findLowestEntropy(this.weightMap);
+                if(lowEntrop.collapsed == true){
+                    console.log('broken');
+                    break;
+                }
+                tileCounter++;
+                this.collapse(lowEntrop);
+                // map2.putTileAt(lowEntrop.tileIndex, lowEntrop.x, lowEntrop.y, true, firstLayer2);
+                if(lowEntrop.tileIndex){
+                    map2.putTileAt(lowEntrop.tileIndex, lowEntrop.x, lowEntrop.y, true, firstLayer2);
+                }
+                else {
+                    console.error('placing invalid index', lowEntrop.tileIndex, lowEntrop.x, lowEntrop.y);
+                }
+            }
+
+            if(tileCounter == map.width * map.height){
+                this.complete = true;
+                console.log('complete');
             }
         }
-
-        console.log(this.newMap);
-        
-        //step 4: Repeat the following steps:New
-        //  i.  Observation:
-        //      A: Find a wave element with the minimal nonzero entropy. 
-        //      If there is no such elements (if all elements have zero or undefined entropy) 
-        //      then break the cycle (4) and go to step (5).
-        //
-        //      B: Collapse this element into a definite state according to its coefficients 
-        //      and the distribution of NxN patterns in the input.
-        //
-        //  ii. Propogation:
-        //      A: Propagation: propagate information gained on the previous observation step.
-
-
-        for(let x = 0; x < 100; x++){
-            var lowEntrop = this.findLowestEntropy();
-            this.collapse(this.lowestEntropy, map2);
-            map2.putTileAt(lowEntrop.tileIndex, lowEntrop.index[0], lowEntrop.index[1], true, firstLayer2);
-        }
-
-
-
-
-
         
         //step 5: By now all the wave elements are either in a completely observed state 
         //      (all the coefficients except one being zero) or in the contradictory state 
@@ -153,14 +170,146 @@ class Play extends Phaser.Scene{
 
 
 
+    // }
+
+
+
+
+    findLowestEntropy(newMap){
+        var lowestEntropy = newMap[0][0];
+        for(let row = 0; row < newMap.length; row++){
+            for(let col = 0; col < newMap[row].length; col++){
+                if(!(newMap[row][col].collapsed) && (newMap[row][col].weights.length > 0) && (newMap[row][col].weights.length <= lowestEntropy.weights.length)){
+                    
+                    //console.log('row:', row, 'col:', col, 'newTile.len:', newMap[row][col].weights.length, 'lowEnt.len:', lowestEntropy.weights.length, 'is collapsed:', newMap[row][col].collapsed);
+
+                    lowestEntropy = newMap[row][col];
+                }
+            }
+        }
+
+        this.counter++;
+        console.log(this.counter);
+        console.log("Lowest Entropy", lowestEntropy);
+        return lowestEntropy;
+
+    }
+
+    
+    collapse(tile){
+        var selectedIndex = this.getRandomIndex(tile.weights);
+        // console.log('tile: ')
+        // console.log(tile);
+        
+        tile.collapsed = true;
+        tile.tileIndex = selectedIndex;
+        this.propagate(tile, this.weightMap);
+        this.weights = [];
+        //console.log(tile);
     }
 
 
 
+    propagate(currTile, map){
+        for(var i = 0; i < this.rules.length; i++){
 
-    update(){
+            // if(map[currTile.x][currTile.y - 1] && !map[currTile.x][currTile.y - 1].collapsed){
 
+            //     map[currTile.x][currTile.y - 1].weights = map[currTile.x][currTile.y-1].weights.filter((element, index, array, that) => {
+            //         console.log(this.rules);
+            //         console.log('----------------------------')
+            //         return true //element.index == 286 && that.rules[i].direction == 'down'
+            //     });
+                
+            // }
+            if(map[currTile.x][currTile.y + 1] && !map[currTile.x][currTile.y + 1].collapsed){
+                
+                map[currTile.x][currTile.y + 1].weights = map[currTile.x][currTile.y + 1].weights.filter(element => element.index == 286);
+
+            }
+
+            if(map[currTile.x - 1] && !map[currTile.x - 1][currTile.y].collapsed){
+                // console.log(map[currTile.x - 1][currTile.y]);
+                // console.log(map[currTile.x - 1][currTile.y].weights)
+                map[currTile.x - 1][currTile.y].weights = map[currTile.x - 1][currTile.y].weights.filter(element => element.index == 286);
+
+            }
+
+            if(map[currTile.x + 1] && !map[currTile.x + 1][currTile.y].collapsed){
+                map[currTile.x + 1][currTile.y].weights = map[currTile.x + 1][currTile.y].weights.filter(element => element.index == 286);
+            }
+
+        }
+            // map[currTile.x + 1][currTile.y].weights = [{index: 286, frequency: 1}];
+
+
+        //for(var rule of this.rules){
+
+
+            // if(currTile.weights.length <= 0){
+            //     //up neighbor
+
+            //     if(map[currTile.x][currTile.y-1] && !map[currTile.x][currTile.y-1].collapsed){
+            //         map[currTile.x][currTile.y-1].weights = map[currTile.x][currTile.y-1].weights.filter(element => element.index == rule.index && currTile.index == rule.adjacentTileIndex && rule.direction == 'down');
+
+            //     }
+
+            //     //down neighbor
+
+            //     if(map[currTile.x][currTile.y + 1] && !map[currTile.x][currTile.y+1].collapsed){
+            //         map[currTile.x][currTile.y+1].weights = map[currTile.x][currTile.y+1].weights.filter(element => element.index == rule.index && currTile.index == rule.adjacentTileIndex && rule.direction == 'up');
+            //     }
+
+            //     //left neighbor
+
+            //     if(map[currTile.x - 1] && !map[currTile.x - 1][currTile.y].collapsed){
+            //         map[currTile.x - 1][currTile.y].weights = map[currTile.x - 1][currTile.y].weights.filter(element => element.index == rule.index && currTile.index == rule.adjacentTileIndex && rule.direction == 'right');
+            //     }
+
+            //     //right neighbor
+
+            //     if(map[currTile.x + 1]  && !map[currTile.x + 1][currTile.y].collapsed){
+            //         map[currTile.x + 1][currTile.y].weights = map[currTile.x + 1][currTile.y].weights.filter(element => element.index == rule.index && currTile.index == rule.adjacentTileIndex && rule.direction == 'left');
+            //     }
+            //     return;
+            // }
+
+            // for(var weight of currTile.weights){
+
+            //     //up neighbor
+
+            //     if(map[currTile.x][currTile.y-1]  && !map[currTile.x][currTile.y-1].collapsed){
+            //         map[currTile.x][currTile.y-1].weights = map[currTile.x][currTile.y-1].weights.filter(element => element.index == rule.index && weight.index == rule.adjacentTileIndex && rule.direction == 'down');
+
+            //     }
+
+            //     //down neighbor
+
+            //     if(map[currTile.x][currTile.y + 1] && !map[currTile.x][currTile.y+1].collapsed){
+            //         map[currTile.x][currTile.y+1].weights = map[currTile.x][currTile.y+1].weights.filter(element => element.index == rule.index && weight.index == rule.adjacentTileIndex && rule.direction == 'up');
+            //     }
+
+            //     //left neighbor
+
+            //     if(map[currTile.x - 1] && !map[currTile.x - 1][currTile.y].collapsed){
+            //         map[currTile.x - 1][currTile.y].weights = map[currTile.x - 1][currTile.y].weights.filter(element => element.index == rule.index && weight.index == rule.adjacentTileIndex && rule.direction == 'right');
+            //     }
+
+            //     //right neighbor
+
+            //     if(map[currTile.x + 1] && !map[currTile.x + 1][currTile.y].collapsed){
+            //         map[currTile.x + 1][currTile.y].weights = map[currTile.x + 1][currTile.y].weights.filter(element => element.index == rule.index && weight.index == rule.adjacentTileIndex && rule.direction == 'left');
+            //     }
+
+
+
+            // }
+        //}
     }
+    
+
+
+
 
 
     iterateOverMap(tileMap, layer){
@@ -235,37 +384,18 @@ class Play extends Phaser.Scene{
 
 
 
-    findLowestEntropy(){
-
-        for(let row = 0; row < this.newMap.length; row++){
-            for(let col = 0; col < this.newMap[row].length; col++){
-                if(this.lowestEntropy == null){
-                    this.lowestEntropy = this.newMap[row][col];
-                }
-                else if(!this.newMap[row][col].collapsed && this.newMap[row][col].weights.length <= this.lowestEntropy.weights.length){
-                    this.lowestEntropy = this.newMap[row][col];
-                }
-            }
-        }
-
-        return this.lowestEntropy;
-
-    }
-
-    
-    collapse(tile){
-        var selectedIndex = this.getRandomIndex(tile.weights);
-        tile.collapsed = true;
-        tile.tileIndex = selectedIndex;
-    }
 
     getRandomIndex(arrOfWeight){
-        //gets an index from an array of objects that have properties index and weight
-        //the chance the object is returned is based on the weight given
+        //gets an index from an array of objects that have properties index and frequency
+        //the chance the object is returned is based on the frequency given
         var rand = (Math.floor(Math.random()*99))/100;
         var counter = 0;
         var totalFreq = 0;
         var foundIndex;
+        if(arrOfWeight.length <= 0){
+            console.error('Array length is 0, cannot get index');
+            return undefined;
+        }
 
         for(let x of arrOfWeight){
             if(x.frequency){
@@ -285,13 +415,5 @@ class Play extends Phaser.Scene{
 
         return foundIndex;
     }
-
-    
-
-    propagate(){
-        
-    }
-    
-
 
 }
